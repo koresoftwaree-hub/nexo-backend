@@ -63,6 +63,29 @@ app.post('/api/caja/operacion', async (req, res) => {
     }
 });
 
+
+
+
+// Ruta secreta para probar Green API
+app.get('/api/test-wa/:numero', async (req, res) => {
+    const numero = req.params.numero;
+    const axios = require('axios');
+    const url = `${process.env.GREEN_API_URL}/waInstance${process.env.GREEN_API_ID_INSTANCE}/sendMessage/${process.env.GREEN_API_API_TOKEN}`;
+    
+    try {
+        await axios.post(url, {
+            chatId: `${numero}@c.us`,
+            message: "¡Hola! Este es un mensaje de prueba desde el cerebro de Nexo Cafe ☕🚀"
+        });
+        res.send(`¡Éxito! Mensaje enviado a ${numero}`);
+    } catch (error) {
+        console.error("Error Green API:", error.response?.data || error.message);
+        res.status(500).send("Falló el envío. Revisa la consola de Render.");
+    }
+});
+
+
+
 // --- CRON JOBS (Automatización) --- //
 // Se ejecuta todos los días a las 11:30 AM
 cron.schedule('30 11 * * *', async () => {
