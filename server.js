@@ -20,9 +20,69 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- RUTAS DE LA CAJA --- //
+// --- RUTA PARA EL LOGIN DE ADMIN ---
+app.post('/api/admin/login', (req, res) => {
+    const { pinIngresado } = req.body;
+    const pinCorrectoAdmin = process.env.PIN_ADMIN || "7777";
 
-// Ruta para sumar/restar puntos y canjear premios
+    if (pinIngresado === pinCorrectoAdmin) {
+        res.status(200).json({ success: true, message: "Acceso concedido" });
+    } else {
+        res.status(401).json({ success: false, error: "PIN de administrador incorrecto" });
+    }
+});
+
+// --- NUEVO: RUTA DE CACHÉ PARA ESTADÍSTICAS DEL DUEÑO ---
+let cacheDashboard = null;
+let ultimaActualizacionCache = 0;
+
+app.post('/api/admin/dashboard-data', async (req, res) => {
+    const { pinIngresado } = req.body;
+    const pinCorrectoAdmin = process.env.PIN_ADMIN || "7777";
+
+    if (pinIngresado !== pinCorrectoAdmin) {
+        return res.status(401).json({ error: "PIN de administrador incorrecto" });
+    }
+
+    const ahora = Date.now();
+    // Si el caché tiene menos de 10 minutos (600,000 milisegundos), enviamos la copia en memoria
+    if (cacheDashboard && (ahora - ultimaActualizacionCache < 600000)) {
+        console.log("Enviando panel desde Caché (Ahorrando lecturas de Firebase)");
+        return res.json({ success: true, fromCache: true, data: cacheDashboard });
+    }
+
+    // Si no hay caché o expiró, hacemos UNA sola lectura global
+    try {
+        console.log("Leyendo Firebase para actualizar el caché del Dashboard...");
+        const querySnapshot = await db.collection("clientes").get();
+        const clientes = [];
+        
+        querySnapshot.forEach(doc => {
+            const d = doc.data();
+            clientes.push({
+                telefono: doc.id,
+                nombre: d.nombre || "Sin Nombre",
+                puntos: d.puntos || 0,
+                premios: d.totalPremiosCanjeados || 0,
+                totalSellos: (d.puntos || 0) + ((d.totalPremiosCanjeados || 0) * 8),
+                fecha: d.fechaRegistro || d.ultimaVisita || '',
+                desc3Usado: d.desc3Usado || false,
+                desc5Usado: d.desc5Usado || false
+            });
+        });
+
+        // Memorizamos los datos para las próximas peticiones
+        cacheDashboard = clientes;
+        ultimaActualizacionCache = ahora;
+
+        res.json({ success: true, fromCache: false, data: cacheDashboard });
+    } catch (error) {
+        console.error("Error cargando dashboard:", error);
+        res.status(500).json({ error: "Error interno cargando las estadísticas" });
+    }
+});
+
+// --- RUTAS DE LA CAJA --- //
 app.post('/api/caja/operacion', async (req, res) => {
     const { pinIngresado, telefono, cantidad, operacion } = req.body;
 
@@ -55,6 +115,12 @@ app.post('/api/caja/operacion', async (req, res) => {
         }
 
         await clienteRef.update(updates);
+        
+        // Magia: Forzamos a que el servidor olvide el caché, así la próxima vez que 
+        // el dueño abra la app, verá el número actualizado que acabamos de guardar.
+        cacheDashboard = null; 
+        ultimaActualizacionCache = 0;
+
         res.status(200).json({ success: true, message: "Operación exitosa" });
 
     } catch (error) {
@@ -62,29 +128,6 @@ app.post('/api/caja/operacion', async (req, res) => {
         res.status(500).json({ error: "Error interno del servidor" });
     }
 });
-
-
-
-
-// Ruta secreta para probar Green API
-app.get('/api/test-wa/:numero', async (req, res) => {
-    const numero = req.params.numero;
-    const axios = require('axios');
-    const url = `${process.env.GREEN_API_URL}/waInstance${process.env.GREEN_API_ID_INSTANCE}/sendMessage/${process.env.GREEN_API_API_TOKEN}`;
-    
-    try {
-        await axios.post(url, {
-            chatId: `${numero}@c.us`,
-            message: "¡Hola! Este es un mensaje de prueba desde el cerebro de Nexo Cafe ☕🚀"
-        });
-        res.send(`¡Éxito! Mensaje enviado a ${numero}`);
-    } catch (error) {
-        console.error("Error Green API:", error.response?.data || error.message);
-        res.status(500).send("Falló el envío. Revisa la consola de Render.");
-    }
-});
-
-
 
 // --- CRON JOBS (Automatización) --- //
 // Se ejecuta todos los días a las 11:30 AM
