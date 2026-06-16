@@ -119,6 +119,17 @@ app.post('/api/caja/operacion', async (req, res) => {
 
         await clienteRef.update(updates);
         
+        // --- NUEVO: GUARDAR HISTORIAL DE MOVIMIENTOS (Para las estadísticas por mes) ---
+        const fechaActual = new Date().toISOString();
+
+        await db.collection('movimientos').add({
+            telefono: telefono,
+            operacion: operacion, // 'sumar_restar', 'canje_3', 'canje_5' o 'canje_final'
+            cantidad: cantidad || 0, // 1 o -1 para sellos, 0 para canjes
+            fecha: fechaActual
+        });
+        // ---------------------------------------------------------------------------------
+        
         // Magia: Forzamos a que el servidor olvide el caché, así la próxima vez que 
         // el dueño abra la app, verá el número actualizado que acabamos de guardar.
         cacheDashboard = null; 
