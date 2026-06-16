@@ -15,8 +15,11 @@ initializeApp({
 
 // Iniciamos la base de datos
 const db = getFirestore();
-
 const app = express();
+
+app.get('/', (req, res) => {
+    res.status(200).send("Servidor Nexo Cafe Activo y Despierto");
+});
 app.use(cors());
 app.use(express.json());
 
