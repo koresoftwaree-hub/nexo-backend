@@ -85,6 +85,21 @@ app.post('/api/admin/dashboard-data', async (req, res) => {
     }
 });
 
+
+// --- RUTA PARA EL LOGIN DE CAJA ---
+app.post('/api/caja/login', (req, res) => {
+    const { pinIngresado } = req.body;
+    // Lee la variable de entorno, si no existe usa '9999' por defecto
+    const pinCorrectoCaja = process.env.PIN_CAJA || "9999";
+
+    if (pinIngresado === pinCorrectoCaja) {
+        res.status(200).json({ success: true, message: "Acceso concedido a la caja" });
+    } else {
+        res.status(401).json({ success: false, error: "PIN de caja incorrecto" });
+    }
+});
+
+
 // --- RUTAS DE LA CAJA --- //
 app.post('/api/caja/operacion', async (req, res) => {
     const { pinIngresado, telefono, cantidad, operacion } = req.body;
